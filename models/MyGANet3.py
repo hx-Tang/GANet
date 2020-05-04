@@ -75,7 +75,8 @@ class Feature(nn.Module):
 
         self.conv_start = nn.Sequential(
             BasicConv(3, 32, kernel_size=3, padding=1),
-            BasicConv(32, 32, kernel_size=5, stride=3, padding=2),
+            BasicConv(32, 32, kernel_size=3, stride=2, padding=1),
+            BasicConv(32, 32, kernel_size=3, stride=2, padding=1),
             BasicConv(32, 32, kernel_size=3, padding=1))
         self.conv1a = BasicConv(32, 48, kernel_size=3, stride=2, padding=1)
         self.conv2a = BasicConv(48, 64, kernel_size=3, stride=2, padding=1)
@@ -139,7 +140,7 @@ class Guidance(nn.Module):
 
         self.conv0 = BasicConv(64, 16, kernel_size=3, padding=1)
         self.conv1 = nn.Sequential(
-            BasicConv(16, 32, kernel_size=5, stride=3, padding=2),
+            BasicConv(16, 32, kernel_size=3, padding=1),
             BasicConv(32, 32, kernel_size=3, padding=1))
 
         self.conv2 = BasicConv(32, 32, kernel_size=3, padding=1)
@@ -189,15 +190,15 @@ class Disp(nn.Module):
         super(Disp, self).__init__()
         self.maxdisp = maxdisp
         self.softmax = nn.Softmin(dim=1)
-        self.disparity = DisparityRegression(maxdisp=self.maxdisp)
+        self.disparity = DisparityRegression(maxdisp=int(self.maxdisp))
 #        self.conv32x1 = BasicConv(32, 1, kernel_size=3)
         self.conv32x1 = nn.Conv3d(32, 1, (3, 3, 3), (1, 1, 1), (1, 1, 1), bias=False)
 
     def forward(self, x):
-        x = F.interpolate(self.conv32x1(x), [self.maxdisp+1, x.size()[3]*3, x.size()[4]*3], mode='trilinear', align_corners=False)
+        x = self.conv32x1(x)
+        # x = F.interpolate(self.conv32x1(x), [self.maxdisp+1, x.size()[3]*3, x.size()[4]*3], mode='trilinear', align_corners=False)
         x = torch.squeeze(x, 1)
         x = self.softmax(x)
-
         return self.disparity(x)
 
 class DispAgg(nn.Module):
@@ -209,7 +210,7 @@ class DispAgg(nn.Module):
         self.LGA2 = LGA2(radius=2)
         self.LGA = LGA(radius=2)
         self.softmax = nn.Softmin(dim=1)
-        self.disparity = DisparityRegression(maxdisp=self.maxdisp)
+        self.disparity = DisparityRegression(maxdisp=int(self.maxdisp))
 #        self.conv32x1 = BasicConv(32, 1, kernel_size=3)
         self.conv32x1=nn.Conv3d(32, 1, (3, 3, 3), (1, 1, 1), (1, 1, 1), bias=False)
 
@@ -219,7 +220,8 @@ class DispAgg(nn.Module):
         return x
 
     def forward(self, x, lg1, lg2):
-        x = F.interpolate(self.conv32x1(x), [self.maxdisp+1, x.size()[3]*3, x.size()[4]*3], mode='trilinear', align_corners=False)
+        x = self.conv32x1(x)
+        # x = F.interpolate(self.conv32x1(x), [self.maxdisp+1, x.size()[3]*3, x.size()[4]*3], mode='trilinear', align_corners=False)
         x = torch.squeeze(x, 1)
         assert(lg1.size() == lg2.size())
         x = self.lga(x, lg1)
@@ -308,12 +310,48 @@ class CostAggregation(nn.Module):
         else:
             return disp1
 
+class ConvRes(nn.Module):
+    def __init__(self, in_channel, out_channel, stride, padding, dilation, is_3d=False):
+        super(ConvRes,self).__init__()
+        self.conv = nn.Sequential(
+            BasicConv(in_channel, out_channel,relu=False, is_3d=is_3d, kernel_size=3, stride=stride, padding=padding, dilation=dilation),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True))
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = x + out
+        return out
+
+
+class EdgeRefine(nn.Module):
+    def __init__(self):
+        super(EdgeRefine,self).__init__()
+        self.conv2d_feature = BasicConv(4, 32, kernel_size=3, stride=1, padding=1)
+        self.convRes_block = nn.Sequential(ConvRes(32, 32, stride=1, padding=2, dilation=2, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=4, dilation=4, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=8, dilation=8, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=1, dilation=1, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=1, dilation=1, is_3d=False)
+                                           )
+        self.conv2d_out = nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x, disp):
+        out = torch.cat([x, disp], 1)
+        out = self.conv2d_feature(out)
+        out = self.convRes_block(out)
+        out = torch.squeeze(
+            disp + self.conv2d_out(out), 1)
+        out = nn.ReLU(inplace=True)(out)
+        return out
+
+
 class GANet(nn.Module):
     def __init__(self, maxdisp=192):
         super(GANet, self).__init__()
         self.maxdisp = maxdisp
-        self.conv_start = nn.Sequential(BasicConv(3, 16, kernel_size=3, padding=1),
-                                        BasicConv(16, 32, kernel_size=3, padding=1))
+        self.conv_start = nn.Sequential(BasicConv(3, 16, kernel_size=3, stride=2, padding=1),
+                                        BasicConv(16, 32, kernel_size=3, stride=2, padding=1),
+                                        BasicConv(32, 32, kernel_size=3, padding=1))
 
         self.conv_x = BasicConv(32, 32, kernel_size=3, padding=1)
         self.conv_y = BasicConv(32, 32, kernel_size=3, padding=1)
@@ -322,8 +360,9 @@ class GANet(nn.Module):
                                      nn.ReLU(inplace=True))
         self.feature = Feature()
         self.guidance = Guidance()
-        self.cost_agg = CostAggregation(self.maxdisp)
-        self.cv = GetCostVolume(int(self.maxdisp/3))
+        self.cost_agg = CostAggregation(int(self.maxdisp/4))
+        self.cv = GetCostVolume(int(self.maxdisp/4))
+        self.edge_refine = EdgeRefine()
 
         for m in self.modules():
             if isinstance(m, (nn.Conv2d, nn.Conv3d)):
@@ -333,21 +372,46 @@ class GANet(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x, y):
-        g = self.conv_start(x)	
+        rem0 = x
+
+        g = self.conv_start(x)
+
         x = self.feature(x)
-
-        rem = x 
-        x = self.conv_x(x)
-
+        rem = x
         y = self.feature(y)
+
+        x = self.conv_x(x)
         y = self.conv_y(y)
 
         x = self.cv(x,y)
 
         x1 = self.conv_refine(rem)
-        x1 = F.interpolate(x1, [x1.size()[2] * 3,x1.size()[3] * 3], mode='bilinear', align_corners=False)
         x1 = self.bn_relu(x1)
         g = torch.cat((g, x1), 1)
         g = self.guidance(g)
-        
-        return self.cost_agg(x, g)
+
+        disp = self.cost_agg(x, g)
+
+        disp = F.interpolate(torch.unsqueeze(disp, 1), [x1.size()[2] * 4, x1.size()[3] * 4], mode='bilinear',
+                              align_corners=False) * 4
+
+        disp1 = self.edge_refine(rem0, disp)
+
+        disp = torch.squeeze(disp, 1)
+
+        # return disp, disp, disp1
+        return disp1
+
+        # if self.training:
+        #     disp = list(disp)
+        #     disp[0] = F.interpolate(torch.unsqueeze(disp[0],1), [x1.size()[2] * 4, x1.size()[3] * 4], mode='bilinear', align_corners=False)*4
+        #     disp[0] = torch.squeeze(disp[0],1)
+        #     disp[1] = F.interpolate(torch.unsqueeze(disp[1],1), [x1.size()[2] * 4, x1.size()[3] * 4], mode='bilinear', align_corners=False)*4
+        #     # disp.append(self.edge_refine(rem0, disp[1]))
+        #     disp[1] = torch.squeeze(disp[1], 1)
+        #     disp.append(disp[1])
+        # else:
+        #     disp = F.interpolate(torch.unsqueeze(disp,1), [x1.size()[2] * 4, x1.size()[3] * 4], mode='bilinear',align_corners=False)*4
+        #     disp0 = self.edge_refine(rem0, disp)
+        #     disp = torch.squeeze(disp, 1)
+        # return disp

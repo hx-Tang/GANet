@@ -308,6 +308,42 @@ class CostAggregation(nn.Module):
         else:
             return disp1
 
+class ConvRes(nn.Module):
+    def __init__(self, in_channel, out_channel, stride, padding, dilation, is_3d=False):
+        super(ConvRes,self).__init__()
+        self.conv = nn.Sequential(
+            BasicConv(in_channel, out_channel,relu=False, is_3d=is_3d, kernel_size=3, stride=stride, padding=padding, dilation=dilation),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True))
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = x + out
+        return out
+
+
+class EdgeRefine(nn.Module):
+    def __init__(self):
+        super(EdgeRefine,self).__init__()
+        self.conv2d_feature = BasicConv(4, 32, kernel_size=3, stride=1, padding=1)
+        self.convRes_block = nn.Sequential(ConvRes(32, 32, stride=1, padding=2, dilation=2, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=4, dilation=4, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=8, dilation=8, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=1, dilation=1, is_3d=False),
+                                           ConvRes(32, 32, stride=1, padding=1, dilation=1, is_3d=False)
+                                           )
+        self.conv2d_out = nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x, disp):
+        disp = torch.unsqueeze(disp,1)
+        out = torch.cat([x, disp], 1)
+        out = self.conv2d_feature(out)
+        out = self.convRes_block(out)
+        out = torch.squeeze(
+            disp + self.conv2d_out(out), 1)
+        out = nn.ReLU(inplace=True)(out)
+        return out
+
+
 class GANet(nn.Module):
     def __init__(self, maxdisp=192):
         super(GANet, self).__init__()
@@ -324,6 +360,13 @@ class GANet(nn.Module):
         self.guidance = Guidance()
         self.cost_agg = CostAggregation(self.maxdisp)
         self.cv = GetCostVolume(int(self.maxdisp/3))
+        # TODO freeze above
+        for m in self.children():
+            m.eval()
+        for p in self.parameters():
+            p.requires_grad = False
+
+        self.edge_refine = EdgeRefine()
 
         for m in self.modules():
             if isinstance(m, (nn.Conv2d, nn.Conv3d)):
@@ -333,7 +376,9 @@ class GANet(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x, y):
-        g = self.conv_start(x)	
+        g = self.conv_start(x)
+        rem0 = x
+
         x = self.feature(x)
 
         rem = x 
@@ -349,5 +394,15 @@ class GANet(nn.Module):
         x1 = self.bn_relu(x1)
         g = torch.cat((g, x1), 1)
         g = self.guidance(g)
-        
-        return self.cost_agg(x, g)
+
+        disp = self.cost_agg(x, g)
+
+        if self.training:
+            disp = list(disp)
+            disp[0].detach()
+            disp[1].detach()
+            disp.append(self.edge_refine(rem0, disp[1]))
+        else:
+            disp = self.edge_refine(rem0, disp)
+
+        return disp

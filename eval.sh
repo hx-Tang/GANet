@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=1,2,3 python eval.py --max_disp=192 --val_list='lists/sceneflow_test.list' --kitti2015=0 --data_path='/homes/ht314/dataset2/' --resume='./checkpoint/GANet11/sceneflow_epoch_300.pth' --model='GANet11'

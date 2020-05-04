@@ -42,6 +42,22 @@ if opt.model == 'GANet11':
     from models.GANet11 import GANet
 elif opt.model == 'GANet_deep':
     from models.GANet_deep import GANet
+elif opt.model == 'MyGANet':
+    from models.MyGANet import GANet
+elif opt.model == 'MyGANet2':
+    from models.MyGANet2 import GANet
+elif opt.model == 'MyGANet3':
+    from models.MyGANet3 import GANet
+elif opt.model == 'MyGANet4':
+    from models.MyGANet4 import GANet
+elif opt.model == 'MyGANet4_8':
+    from models.MyGANet4_8 import GANet
+elif opt.model == 'MyGANet4_8_rf':
+    from models.MyGANet4_8_rf import GANet
+elif opt.model == 'MyGANet5':
+    from models.MyGANet5 import GANet
+elif opt.model == 'MyGANet9':
+    from models.MyGANet9 import GANet
 else:
     raise Exception("No suitable model found ...")
     
@@ -136,8 +152,8 @@ def test(leftname, rightname, savename):
     else:
         temp = temp[0, :, :]
     skimage.io.imsave(savename, (temp * 256).astype('uint16'))
+    print('result save to {}'.format(savename))
 
-   
 if __name__ == "__main__":
     file_path = opt.data_path
     file_list = opt.test_list

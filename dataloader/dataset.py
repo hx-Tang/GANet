@@ -103,8 +103,8 @@ def test_transform(temp_data, crop_height, crop_width, left_right=False):
         temp_data[6: 7, :, :] = 1000
         temp_data[:, crop_height - h: crop_height, crop_width - w: crop_width] = temp
     else:
-        start_x = (w-crop_width)/2
-        start_y = (h-crop_height)/2
+        start_x = int((w-crop_width)/2)
+        start_y = int((h-crop_height)/2)
         temp_data = temp_data[:, start_y: start_y + crop_height, start_x: start_x + crop_width]
    
     left = temp_data[0: 3, :, :]
@@ -116,14 +116,12 @@ def test_transform(temp_data, crop_height, crop_width, left_right=False):
 
 def load_data(data_path, current_file):
     A = current_file
-    filename = data_path + 'frames_finalpass/' + A[0: len(A) - 1]
+    filename = data_path + 'frames_cleanpass/' + A[0: len(A) - 1]
     left  =Image.open(filename)
-    filename = data_path + 'frames_finalpass/' + A[0: len(A) - 14] + 'right/' + A[len(A) - 9:len(A) - 1]
+    filename = data_path + 'frames_cleanpass/' + A[0: len(A) - 14] + 'right/' + A[len(A) - 9:len(A) - 1]
     right = Image.open(filename)
     filename = data_path + 'disparity/' + A[0: len(A) - 4] + 'pfm'
     disp_left, height, width = readPFM(filename)
-    filename = data_path + 'disparity/' + A[0: len(A) - 14] + 'right/' + A[len(A) - 9: len(A) - 4] + 'pfm'
-    disp_right, height, width = readPFM(filename)
     size = np.shape(left)
     height = size[0]
     width = size[1]
@@ -144,7 +142,7 @@ def load_data(data_path, current_file):
     temp_data[5, :, :] = (b - np.mean(b[:])) / np.std(b[:])
     temp_data[6: 7, :, :] = width * 2
     temp_data[6, :, :] = disp_left
-    temp_data[7, :, :] = disp_right
+    temp_data[7, :, :] = disp_left
     return temp_data
 
 

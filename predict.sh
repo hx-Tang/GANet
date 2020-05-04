@@ -1,4 +1,24 @@
-
+CUDA_VISIBLE_DEVICES=2 python predict.py --crop_height=384 \
+                  --crop_width=1248 \
+                  --max_disp=192 \
+                  --data_path='/homes/ht314/dataset/training/' \
+                  --test_list='lists/kitti_test.list' \
+                  --save_path='./result/GANet11/' \
+                  --kitti2015=1 \
+                  --model='GANet11'\
+                  --resume='./checkpoint/GANet11/kitti2015_final.pth'
+exit
+CUDA_VISIBLE_DEVICES=1 python predict.py --crop_height=384 \
+                  --crop_width=1248 \
+                  --max_disp=192 \
+                  --data_path='/homes/ht314/dataset/training/' \
+                  --test_list='lists/kitti_test.list' \
+                  --save_path='./result/GANet11/2015/' \
+                  --kitti2015=1 \
+                  --model='GANet11'\
+                  --resume='./checkpoint/GANet11/kitti2015_final.pth'
+exit
+###############
 python predict.py --crop_height=384 \
                   --crop_width=1248 \
                   --max_disp=192 \
