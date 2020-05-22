@@ -562,7 +562,7 @@ class GANet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, y):
+    def forward(self, x, y, gt):
         __, _, h, w = x.size()
         rem0 = x
 
@@ -589,9 +589,9 @@ class GANet(nn.Module):
             # return disp00, disp01
         else:
             disp01 = upsample(h, w)(disp0)
-        return disp01
+        # return disp01
 
-        disp1 = upsample(h / 4, w / 4, keep_dim=True)(disp01)
+        disp1 = upsample(h / 4, w / 4, keep_dim=True)(gt)
         res_cv1 = self.Res_cv11(x1, y1, disp1)
         disp1 = self.Res_Pred1(res_cv1, h, w)
         disp1 = disp01 + disp1
