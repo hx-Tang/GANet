@@ -1,22 +1,14 @@
 from __future__ import print_function
 import argparse
-from math import log10
 
-from libs.GANet.modules.GANet import MyLoss2
-import sys
-import shutil
 import os
 import time
 import torch
-import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.optim as optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 # from models.GANet_deep import GANet
-import torch.nn.functional as F
-from dataloader.data import get_training_set, get_test_set
+from dataloader.data import get_test_set
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch GANet Example')
@@ -40,19 +32,19 @@ if opt.model == 'GANet11':
 elif opt.model == 'GANet_deep':
     from models.GANet_deep import GANet
 elif opt.model == 'MyGANet':
-    from models.MyGANet import GANet
+    from models.tests.MyGANet import GANet
 elif opt.model == 'MyGANet2':
-    from models.MyGANet2 import GANet
+    from models.tests.MyGANet2 import GANet
 elif opt.model == 'MyGANet3':
-    from models.MyGANet3 import GANet
+    from models.tests.MyGANet3 import GANet
 elif opt.model == 'MyGANet4':
-    from models.MyGANet4 import GANet
+    from models.tests.MyGANet4 import GANet
 elif opt.model == 'MyGANet4_8' or opt.model == 'MyGANet4_8_t1':
-    from models.MyGANet4_8 import GANet
+    from models.tests.MyGANet4_8 import GANet
 elif opt.model == 'MyGANet4_8_rf' or opt.model == 'MyGANet4_8_rf_t1':
-    from models.MyGANet4_8_rf import GANet
+    from models.tests.MyGANet4_8_rf import GANet
 elif opt.model == 'MyGANet5' or opt.model == 'MyGANet5_t1':
-    from models.MyGANet5 import GANet
+    from models.tests.MyGANet5 import GANet
 elif opt.model == 'MyGANet9':
     from models.MyGANet9 import GANet
 else:

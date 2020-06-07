@@ -4,20 +4,13 @@ import skimage
 import skimage.io
 import skimage.transform
 from PIL import Image
-from math import log10
 #from GCNet.modules.GCNet import L1Loss
 import sys
-import shutil
 import os
 import torch
-import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.optim as optim
 from torch.autograd import Variable
-from torch.utils.data import DataLoader
 #from models.GANet_deep import GANet
-from dataloader.data import get_test_set
 import numpy as np
 
 # Training settings
@@ -43,19 +36,19 @@ if opt.model == 'GANet11':
 elif opt.model == 'GANet_deep':
     from models.GANet_deep import GANet
 elif opt.model == 'MyGANet':
-    from models.MyGANet import GANet
+    from models.tests.MyGANet import GANet
 elif opt.model == 'MyGANet2':
-    from models.MyGANet2 import GANet
+    from models.tests.MyGANet2 import GANet
 elif opt.model == 'MyGANet3':
-    from models.MyGANet3 import GANet
+    from models.tests.MyGANet3 import GANet
 elif opt.model == 'MyGANet4':
-    from models.MyGANet4 import GANet
+    from models.tests.MyGANet4 import GANet
 elif opt.model == 'MyGANet4_8':
-    from models.MyGANet4_8 import GANet
+    from models.tests.MyGANet4_8 import GANet
 elif opt.model == 'MyGANet4_8_rf':
-    from models.MyGANet4_8_rf import GANet
+    from models.tests.MyGANet4_8_rf import GANet
 elif opt.model == 'MyGANet5':
-    from models.MyGANet5 import GANet
+    from models.tests.MyGANet5 import GANet
 elif opt.model == 'MyGANet9':
     from models.MyGANet9 import GANet
 else:
@@ -154,6 +147,41 @@ def test(leftname, rightname, savename):
     skimage.io.imsave(savename, (temp * 256).astype('uint16'))
     print('result save to {}'.format(savename))
 
+def readPFM(file):
+    with open(file, "rb") as f:
+            # Line 1: PF=>RGB (3 channels), Pf=>Greyscale (1 channel)
+        type = f.readline().decode('latin-1')
+        if "PF" in type:
+            channels = 3
+        elif "Pf" in type:
+            channels = 1
+        else:
+            sys.exit(1)
+        # Line 2: width height
+        line = f.readline().decode('latin-1')
+        width, height = re.findall('\d+', line)
+        width = int(width)
+        height = int(height)
+
+            # Line 3: +ve number means big endian, negative means little endian
+        line = f.readline().decode('latin-1')
+        BigEndian = True
+        if "-" in line:
+            BigEndian = False
+        # Slurp all binary data
+        samples = width * height * channels;
+        buffer = f.read(samples * 4)
+        # Unpack floats with appropriate endianness
+        if BigEndian:
+            fmt = ">"
+        else:
+            fmt = "<"
+        fmt = fmt + str(samples) + "f"
+        img = unpack(fmt, buffer)
+        img = np.reshape(img, (height, width))
+        img = np.flipud(img)
+    return img, height, width
+
 if __name__ == "__main__":
     file_path = opt.data_path
     file_list = opt.test_list
@@ -164,10 +192,17 @@ if __name__ == "__main__":
         if opt.kitti2015:
             leftname = file_path + 'image_2/' + current_file[0: len(current_file) - 1]
             rightname = file_path + 'image_3/' + current_file[0: len(current_file) - 1]
+            savename = opt.save_path + current_file[0: len(current_file) - 1]
         if opt.kitti:
             leftname = file_path + 'colored_0/' + current_file[0: len(current_file) - 1]
             rightname = file_path + 'colored_1/' + current_file[0: len(current_file) - 1]
+            savename = opt.save_path + current_file[0: len(current_file) - 1]
+        else:
+            leftname = file_path + 'frames_finalpass/' + current_file[0: len(current_file) - 1]
+            rightname = file_path + 'frames_finalpass/' + current_file[0: len(current_file) - 14] + 'right/' + current_file[len(current_file) - 9:len(current_file) - 1]
+            dispname = file_path + 'disparity/' + current_file[0: len(current_file) - 4] + 'pfm'
+            savename = file_path + str(index) + '.png'
+            disp, height, width = readPFM(dispname)
 
-        savename = opt.save_path + current_file[0: len(current_file) - 1]
         test(leftname, rightname, savename)
 
