@@ -40,7 +40,7 @@
 #
 # print(o)
 
-from models.MyGANet9 import GANet
+from models.CasGANet10 import GANet
 import numpy as np
 import datetime
 import torch

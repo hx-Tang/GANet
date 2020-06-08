@@ -169,15 +169,17 @@ class Guidance(nn.Module):
         super(Guidance, self).__init__()
 
         self.conv0 = BasicConv(64, 16, kernel_size=3, padding=1)
-        self.conv1 = nn.Sequential(
-            BasicConv(16, 32, kernel_size=3, padding=1),
-            BasicConv(32, 32, kernel_size=3, padding=1))
-
+        self.conv1 = nn.Sequential(BasicConv(16, 32, kernel_size=3, padding=1),
+                                   BasicConv(32, 32, kernel_size=3, padding=1))
         self.conv2 = BasicConv(32, 32, kernel_size=3, padding=1)
 
         self.conv11 = nn.Sequential(BasicConv(32, 48, kernel_size=3, stride=2, padding=1),
                                     BasicConv(48, 48, kernel_size=3, padding=1))
         self.conv12 = BasicConv(48, 48, kernel_size=3, padding=1)
+
+        self.conv21 = nn.Sequential(BasicConv(48, 64, kernel_size=3, stride=2, padding=1),
+                                    BasicConv(64, 64, kernel_size=3, padding=1))
+        self.conv22 = BasicConv(64, 64, kernel_size=3, padding=1)
 
         self.weight_sg1 = nn.Conv2d(32, 640, (3, 3), (1, 1), (1, 1), bias=False)
         self.weight_sg2 = nn.Conv2d(32, 640, (3, 3), (1, 1), (1, 1), bias=False)
@@ -185,9 +187,14 @@ class Guidance(nn.Module):
         self.weight_sg11 = nn.Conv2d(48, 960, (3, 3), (1, 1), (1, 1), bias=False)
         self.weight_sg12 = nn.Conv2d(48, 960, (3, 3), (1, 1), (1, 1), bias=False)
 
+        self.weight_sg21 = nn.Conv2d(64, 1280, (3, 3), (1, 1), (1, 1), bias=False)
+        self.weight_sg22 = nn.Conv2d(64, 1280, (3, 3), (1, 1), (1, 1), bias=False)
+
         self.weight_lg1 = nn.Sequential(BasicConv(16, 16, kernel_size=3, padding=1),
                                         nn.Conv2d(16, 75, (3, 3), (1, 1), (1, 1), bias=False))
         self.weight_lg2 = nn.Sequential(BasicConv(16, 16, kernel_size=3, padding=1),
+                                        nn.Conv2d(16, 75, (3, 3), (1, 1), (1, 1), bias=False))
+        self.weight_lg3 = nn.Sequential(BasicConv(16, 16, kernel_size=3, padding=1),
                                         nn.Conv2d(16, 75, (3, 3), (1, 1), (1, 1), bias=False))
 
     def forward(self, x):
@@ -203,16 +210,25 @@ class Guidance(nn.Module):
         x = self.conv12(x)
         sg12 = self.weight_sg12(x)
 
+        x = self.conv21(x)
+        sg21 = self.weight_sg21(x)
+        x = self.conv22(x)
+        sg22 = self.weight_sg22(x)
+
         lg1 = self.weight_lg1(rem)
         lg2 = self.weight_lg2(rem)
+        lg3 = self.weight_lg3(rem)
 
         return dict([
             ('sg1', sg1),
             ('sg2', sg2),
             ('sg11', sg11),
             ('sg12', sg12),
+            ('sg21', sg21),
+            ('sg22', sg22),
             ('lg1', lg1),
-            ('lg2', lg2)])
+            ('lg2', lg2),
+            ('lg3', lg3)])
 
 
 class Disp(nn.Module):
@@ -251,14 +267,12 @@ class DispAgg(nn.Module):
         x = self.LGA2(x, g)
         return x
 
-    def forward(self, x, lg1, lg2):
+    def forward(self, x, lg1):
         x = self.conv32x1(x)
-        # x = F.interpolate(self.conv32x1(x), [self.maxdisp+1, x.size()[3]*3, x.size()[4]*3], mode='trilinear', align_corners=False)
+        x = F.interpolate(self.conv32x1(x), [self.maxdisp+1, x.size()[3]*8, x.size()[4]*8], mode='trilinear', align_corners=False)
         x = torch.squeeze(x, 1)
-        assert (lg1.size() == lg2.size())
         x = self.lga(x, lg1)
         x = self.softmax(x)
-        x = self.lga(x, lg2)
         x = F.normalize(x, p=1, dim=1)
         return self.disparity(x)
 
@@ -302,48 +316,22 @@ class CostAggregation(nn.Module):
     def __init__(self, maxdisp=192):
         super(CostAggregation, self).__init__()
         self.maxdisp = maxdisp
-        self.conv_start = BasicConv(64, 32, is_3d=True, kernel_size=3, padding=1, relu=False)
+        self.conv_start = BasicConv(64, 64, is_3d=True, kernel_size=3, padding=1, relu=False)
 
-        self.conv1a = BasicConv(32, 48, is_3d=True, kernel_size=3, stride=2, padding=1)
-        self.conv2a = BasicConv(48, 64, is_3d=True, kernel_size=3, stride=2, padding=1)
-        #        self.conv3a = BasicConv(64, 96, is_3d=True, kernel_size=3, stride=2, padding=1)
-
-        self.deconv1a = Conv2x(48, 32, deconv=True, is_3d=True, relu=False)
-        self.deconv2a = Conv2x(64, 48, deconv=True, is_3d=True)
-        #        self.deconv0a = Conv2x(8, 8, deconv=True, is_3d=True)
+        self.conv1a = BasicConv(64, 64, is_3d=True, kernel_size=3, padding=1)
 
         self.sga1 = SGABlock(refine=True)
         self.sga2 = SGABlock(refine=True)
 
-        self.sga11 = SGABlock(channels=48, refine=True)
-        self.sga12 = SGABlock(channels=48, refine=True)
-
-        self.disp0 = Disp(self.maxdisp)
         self.disp1 = DispAgg(self.maxdisp)
 
     def forward(self, x, g):
-
         x = self.conv_start(x)
-        x = self.sga1(x, g['sg1'])
-        rem0 = x
-
-        if self.training:
-            disp0 = self.disp0(x)
-
+        x = self.sga1(x, g['sg21'])
         x = self.conv1a(x)
-        x = self.sga11(x, g['sg11'])
-        rem1 = x
-        x = self.conv2a(x)
-        x = self.deconv2a(x, rem1)
-        x = self.sga12(x, g['sg12'])
-        x = self.deconv1a(x, rem0)
-        x = self.sga2(x, g['sg2'])
-        disp1 = self.disp1(x, g['lg1'], g['lg2'])
-
-        if self.training:
-            return disp0, disp1
-        else:
-            return disp1
+        x = self.sga2(x, g['sg22'])
+        disp1 = self.disp1(x, g['lg3'])
+        return disp1
 
 
 class ConvRes(nn.Module):
@@ -358,33 +346,6 @@ class ConvRes(nn.Module):
         out = self.conv(x)
         out = x + out
         return out
-
-
-# class EdgeRefine(nn.Module):
-#     def __init__(self):
-#         super(EdgeRefine, self).__init__()
-#         self.conv2d_feature = nn.Sequential(BasicConv(4, 32, kernel_size=3, stride=1, padding=1, relu=False),
-#                                             nn.LeakyReLU(negative_slope=0.2, inplace=True))
-#         self.convRes_block = nn.Sequential(ConvRes(32, 32, stride=1, padding=2, dilation=2, is_3d=False),
-#                                            ConvRes(32, 32, stride=1, padding=4, dilation=4, is_3d=False),
-#                                            ConvRes(32, 32, stride=1, padding=8, dilation=8, is_3d=False),
-#                                            ConvRes(32, 32, stride=1, padding=1, dilation=1, is_3d=False),
-#                                            ConvRes(32, 32, stride=1, padding=1, dilation=1, is_3d=False)
-#                                            )
-#         self.conv2d_out = nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1)
-#
-#     def forward(self, x, disp):
-#         disp = torch.unsqueeze(disp, 1)
-#         out = torch.cat([x, disp], 1)
-#         out = self.conv2d_feature(out)
-#         out = self.convRes_block(out)
-#         out = torch.squeeze(
-#             disp + self.conv2d_out(out), 1)
-#         # out = torch.squeeze(
-#         #     self.conv2d_out(out), 1)
-#         out = nn.ReLU(inplace=True)(out)
-#         return out
-
 
 # distance based cost volume
 class RebuildCostVolume2(nn.Module):
@@ -434,26 +395,40 @@ class ResidualPredition2(nn.Module):
     def __init__(self, maxdisp, channel):
         super(ResidualPredition2, self).__init__()
         self.maxdisp = maxdisp + 1
-        self.conv3ds = nn.Sequential(BasicConv(1, channel, kernel_size=3, padding=1, is_3d=True),
-                                     BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True),
-                                     BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True),
-                                     BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True),
-                                     BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True),
-                                     BasicConv(channel, 1, kernel_size=3, padding=1, is_3d=True)
-                                     )
+        self.conv1 = nn.Sequential(BasicConv(1, channel, kernel_size=3, padding=1, is_3d=True),
+                                     BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True))
+        self.conv2 = BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True)
+        self.conv3 = nn.Sequential(BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True),
+                                    BasicConv(channel, 1, kernel_size=3, padding=1, is_3d=True))
 
-    def forward(self, cv, h, w):
+        self.sga11 = SGABlock(channels=channel, refine=True)
+        self.sga12 = SGABlock(channels=channel, refine=True)
+        self.LGA2 = LGA2(radius=2)
+
+    def lga(self, x, g):
+        g = F.normalize(g, p=1, dim=1)
+        x = self.LGA2(x, g)
+        return x
+
+    def forward(self, cv, g, disp0, h, w):
         cv = torch.unsqueeze(cv, 1)
-        cv = self.conv3ds(cv)
+        cv = self.conv1(cv)
+        cv = self.sga11(cv, g[0])
+        cv = self.conv2(cv)
+        cv = self.sga12(cv, g[1])
+        cv = self.conv3(cv)
         cv = F.interpolate(cv, [self.maxdisp, h, w], mode='trilinear', align_corners=False)
         x = torch.squeeze(cv, 1)
+        x = self.lga(x, g[2])
+        x = self.softmax(x)
+        x = F.normalize(x, p=1, dim=1)
         assert (x.is_contiguous() == True)
         with torch.cuda.device_of(x):
             disp = x.new().resize_(x.size()[0], self.maxdisp, x.size()[2], x.size()[3]).zero_()
             for i in range(self.maxdisp):
                 disp[:, i, :, :] = i - int((self.maxdisp - 1) / 2)
             out = torch.sum(x * disp, 1)
-        return out
+        return out + disp0
 
 
 
@@ -483,7 +458,7 @@ class GANet(nn.Module):
                                         BasicConv(16, 32, kernel_size=3, padding=1))
         self.conv_x = BasicConv(32, 32, kernel_size=3, padding=1)
         self.conv_y = BasicConv(32, 32, kernel_size=3, padding=1)
-        self.conv_refine = nn.Conv2d(32, 32, (3, 3), (1, 1), (1, 1), bias=False)
+        self.conv_refine = nn.Conv2d(8, 32, (3, 3), (1, 1), (1, 1), bias=False)
         self.bn_relu = nn.Sequential(apex.parallel.SyncBatchNorm(32),
                                      nn.ReLU(inplace=True))
         self.feature = Feature()
@@ -491,9 +466,9 @@ class GANet(nn.Module):
         self.cost_agg = CostAggregation(self.maxdisp)
         self.cv = GetCostVolume(int(self.maxdisp / 8))
         self.Res_cv11 = RebuildCostVolume2(3)
-        self.Res_Pred1 = ResidualPredition2(4 * 4, 16)
+        self.Res_Pred1 = ResidualPredition2(4 * 4, 48)
         self.Res_cv22 = RebuildCostVolume2(3)
-        self.Res_Pred2 = ResidualPredition2(4 * 2, 8)
+        self.Res_Pred2 = ResidualPredition2(4 * 2, 32)
         for m in self.modules():
             if isinstance(m, (nn.Conv2d, nn.Conv3d)):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -508,7 +483,7 @@ class GANet(nn.Module):
         x0, x1, x2 = self.feature(x)
         y0, y1, y2 = self.feature(y)
 
-        # Guidance Subnet: SGA00,01,10,11,20,21 & LGA0,1,2
+        # Guidance Subnet
         xg = self.conv_refine(x2)
         xg = upsample(h, w)(xg)
         xg = self.bn_relu(xg)
@@ -516,28 +491,22 @@ class GANet(nn.Module):
         g = torch.cat((g, xg), 1)
         g = self.guidance(g)
 
+        # 1/8 GA
         x0 = self.conv_x(x0)
         y0 = self.conv_y(y0)
         cv = self.cv(x0, y0)
         disp0 = self.cost_agg(cv, g)
 
-        # TODO out1
-        if self.training:
-            disp00 = disp0[0]
-            disp0 = disp0[1]
-            # return disp00, disp0
-
+        # 1/4 GA
         disp1 = upsample(h / 4, w / 4, keep_dim=True)(disp0)
         res_cv1 = self.Res_cv11(x1, y1, disp1)
-        disp1 = self.Res_Pred1(res_cv1, g, disp0, h, w)
+        disp1 = self.Res_Pred1(res_cv1, [g['sg11'],g['sg12'],g['lg2']], disp0, h, w)
 
+        # 1/2 GA
         disp2 = upsample(h / 2, w / 2, keep_dim=True)(disp1)
         res_cv2 = self.Res_cv22(x2, y2, disp2)
-        disp2 = self.Res_Pred2(res_cv2, g, disp1, h, w)
-
-        # TODO out2
-        # return disp00, disp01, disp1, disp2
+        disp2 = self.Res_Pred2(res_cv2, [g['sg1'],g['sg2'],g['lg1']], disp1, h, w)
 
         if self.training:
-            return disp00, disp0, disp1, disp2
+            return disp0, disp1, disp2
         return disp2
