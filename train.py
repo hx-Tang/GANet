@@ -63,6 +63,8 @@ elif opt.model == 'MyGANet5' or opt.model == 'MyGANet5_t1':
     from models.tests.MyGANet5 import GANet
 elif opt.model == 'MyGANet9'or opt.model == 'MyGANet9_t1' or opt.model == 'MyGANet9_t2'or opt.model == 'MyGANet9_t3':
     from models.MyGANet9 import GANet
+elif opt.model == 'CasGANet10':
+    from models.CasGANet10 import GANet
 else:
     raise Exception("No suitable model found ...")
 
@@ -78,7 +80,7 @@ if cuda:
 print('===> Loading datasets')
 train_set = get_training_set(opt.data_path, opt.training_list, [opt.crop_height, opt.crop_width], opt.left_right,
                              opt.kitti, opt.kitti2015, opt.shift)
-test_set = get_test_set(opt.data_path, opt.val_list, [384, 1280], opt.left_right, opt.kitti, opt.kitti2015)
+test_set = get_test_set(opt.data_path, opt.val_list, [256, 512], opt.left_right, opt.kitti, opt.kitti2015)
 training_data_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batchSize, shuffle=True,
                                   drop_last=True)
 testing_data_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=opt.testBatchSize, shuffle=False)
@@ -226,7 +228,7 @@ def train(epoch):
                            0.6 * F.smooth_l1_loss(disp11[mask], target[mask], reduction='mean') + \
                            1 * F.smooth_l1_loss(disp1[mask], target[mask], reduction='mean') + \
                            1 * F.smooth_l1_loss(disp2[mask], target[mask], reduction='mean')
-            elif opt.model == 'GANet_deep':
+            elif opt.model == 'GANet_deep' or opt.model == 'CasGANet10':
                 disp0, disp1, disp2 = model(input1, input2)
                 if opt.kitti or opt.kitti2015:
                     loss = 0.2 * F.smooth_l1_loss(disp0[mask], target[mask], reduction='mean') + 0.6 * F.smooth_l1_loss(
@@ -349,10 +351,10 @@ if __name__ == '__main__':
         error_rate_list.append(erate)
         plot_curve('error_rate', error_rate_list)
 
-        # if loss < error or erate < rate:
-        #     error=loss
-        #     rate=erate
-        #     is_best = True
+        if loss < error or erate < rate:
+            error=loss
+            rate=erate
+            is_best = True
 
         if opt.kitti or opt.kitti2015:
             if epoch % 50 == 0 or is_best:
@@ -362,7 +364,7 @@ if __name__ == '__main__':
                     'optimizer': optimizer.state_dict(),
                 }, is_best)
         else:
-            if epoch % 50 == 0 or is_best:
+            if epoch % 5 == 0 or is_best:
                 save_checkpoint(opt.save_path, epoch, {
                     'epoch': epoch,
                     'state_dict': model.state_dict(),

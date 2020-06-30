@@ -566,7 +566,7 @@ class GANet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, y, gt):
+    def forward(self, x, y):
         __, _, h, w = x.size()
         rem0 = x
 
@@ -596,14 +596,14 @@ class GANet(nn.Module):
             disp01 = upsample(h, w)(disp0)
         # return disp01
 
-        gt = torch.randn(1, 384, 768).zero_().cuda()
-        # gt = upsample(h / 8, w / 8)(gt)*8
-        # gt = upsample(h, w)(gt)
-        return gt
+        # gt = torch.randn(1, 384, 768).zero_().cuda()
+        # # gt = upsample(h / 8, w / 8)(gt)*8
+        # # gt = upsample(h, w)(gt)
+        # return gt
 
-        gt = upsample(h / 8, w / 8)(gt)
-        disp1 = upsample(h / 4, w / 4, keep_dim=True)(gt)
-        # disp1 = upsample(h / 4, w / 4, keep_dim=True)(disp01)
+        # gt = upsample(h / 8, w / 8)(gt)
+        # disp1 = upsample(h / 4, w / 4, keep_dim=True)(gt)
+        disp1 = upsample(h / 4, w / 4, keep_dim=True)(disp01)
         res_cv1 = self.Res_cv11(x1, y1, disp1)
         disp1 = self.Res_Pred1(res_cv1, h, w)
         disp1 = disp01 + disp1

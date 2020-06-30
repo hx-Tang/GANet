@@ -169,7 +169,7 @@ class Guidance(nn.Module):
         super(Guidance, self).__init__()
 
         self.conv0 = BasicConv(64, 16, kernel_size=3, padding=1)
-        self.conv1 = nn.Sequential(BasicConv(16, 32, kernel_size=3, padding=1),
+        self.conv1 = nn.Sequential(BasicConv(16, 32, kernel_size=3, stride=2, padding=1),
                                    BasicConv(32, 32, kernel_size=3, padding=1))
         self.conv2 = BasicConv(32, 32, kernel_size=3, padding=1)
 
@@ -259,8 +259,7 @@ class DispAgg(nn.Module):
         self.LGA = LGA(radius=2)
         self.softmax = nn.Softmin(dim=1)
         self.disparity = DisparityRegression(maxdisp=int(self.maxdisp))
-        #        self.conv32x1 = BasicConv(32, 1, kernel_size=3)
-        self.conv32x1 = nn.Conv3d(32, 1, (3, 3, 3), (1, 1, 1), (1, 1, 1), bias=False)
+        self.conv64x1 = nn.Conv3d(64, 1, (3, 3, 3), (1, 1, 1), (1, 1, 1), bias=False)
 
     def lga(self, x, g):
         g = F.normalize(g, p=1, dim=1)
@@ -268,8 +267,8 @@ class DispAgg(nn.Module):
         return x
 
     def forward(self, x, lg1):
-        x = self.conv32x1(x)
-        x = F.interpolate(self.conv32x1(x), [self.maxdisp+1, x.size()[3]*8, x.size()[4]*8], mode='trilinear', align_corners=False)
+        x = self.conv64x1(x)
+        x = F.interpolate(x, [self.maxdisp+1, x.size()[3]*8, x.size()[4]*8], mode='trilinear', align_corners=False)
         x = torch.squeeze(x, 1)
         x = self.lga(x, lg1)
         x = self.softmax(x)
@@ -320,8 +319,8 @@ class CostAggregation(nn.Module):
 
         self.conv1a = BasicConv(64, 64, is_3d=True, kernel_size=3, padding=1)
 
-        self.sga1 = SGABlock(refine=True)
-        self.sga2 = SGABlock(refine=True)
+        self.sga1 = SGABlock(channels=64, refine=True)
+        self.sga2 = SGABlock(channels=64, refine=True)
 
         self.disp1 = DispAgg(self.maxdisp)
 
@@ -400,7 +399,7 @@ class ResidualPredition2(nn.Module):
         self.conv2 = BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True)
         self.conv3 = nn.Sequential(BasicConv(channel, channel, kernel_size=3, padding=1, is_3d=True),
                                     BasicConv(channel, 1, kernel_size=3, padding=1, is_3d=True))
-
+        self.softmax = nn.Softmin(dim=1)
         self.sga11 = SGABlock(channels=channel, refine=True)
         self.sga12 = SGABlock(channels=channel, refine=True)
         self.LGA2 = LGA2(radius=2)
@@ -476,7 +475,7 @@ class GANet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, y, gt):
+    def forward(self, x, y):
         __, _, h, w = x.size()
 
         # feature extraction U-Net2
@@ -485,7 +484,7 @@ class GANet(nn.Module):
 
         # Guidance Subnet
         xg = self.conv_refine(x2)
-        xg = upsample(h, w)(xg)
+        xg = F.interpolate(xg, [h, w], mode='bilinear', align_corners=False)
         xg = self.bn_relu(xg)
         g = self.conv_start(x)
         g = torch.cat((g, xg), 1)

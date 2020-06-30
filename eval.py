@@ -47,6 +47,8 @@ elif opt.model == 'MyGANet5' or opt.model == 'MyGANet5_t1':
     from models.tests.MyGANet5 import GANet
 elif opt.model == 'MyGANet9':
     from models.MyGANet9 import GANet
+elif opt.model == 'CasGANet10':
+    from models.CasGANet10 import GANet
 else:
     raise Exception("No suitable model found ...")
 
@@ -56,7 +58,7 @@ if cuda and not torch.cuda.is_available():
     raise Exception("No GPU found, please run without --cuda")
 
 print('===> Loading datasets')
-test_set = get_test_set(opt.data_path, opt.val_list, [384, 768], opt.left_right, opt.kitti, opt.kitti2015)
+test_set = get_test_set(opt.data_path, opt.val_list, [256, 512], opt.left_right, opt.kitti, opt.kitti2015)
 testing_data_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=opt.testBatchSize, shuffle=False)
 
 print('===> Building model')

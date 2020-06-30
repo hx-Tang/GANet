@@ -51,9 +51,11 @@ elif opt.model == 'MyGANet5':
     from models.tests.MyGANet5 import GANet
 elif opt.model == 'MyGANet9':
     from models.MyGANet9 import GANet
+elif opt.model == 'CasGANet10':
+    from models.CasGANet10 import GANet
 else:
     raise Exception("No suitable model found ...")
-    
+
 cuda = opt.cuda
 #cuda = True
 if cuda and not torch.cuda.is_available():
@@ -193,7 +195,7 @@ if __name__ == "__main__":
             leftname = file_path + 'image_2/' + current_file[0: len(current_file) - 1]
             rightname = file_path + 'image_3/' + current_file[0: len(current_file) - 1]
             savename = opt.save_path + current_file[0: len(current_file) - 1]
-        if opt.kitti:
+        elif opt.kitti:
             leftname = file_path + 'colored_0/' + current_file[0: len(current_file) - 1]
             rightname = file_path + 'colored_1/' + current_file[0: len(current_file) - 1]
             savename = opt.save_path + current_file[0: len(current_file) - 1]

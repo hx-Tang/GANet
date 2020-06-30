@@ -41,12 +41,13 @@
 # print(o)
 
 from models.CasGANet10 import GANet
+from models.MyGANet9 import GANet
+from models.GANet11 import GANet
 import numpy as np
 import datetime
 import torch
 
 model = GANet()
-
 
 print('parameters:{}'.format(np.sum([p.numel() for p in model.parameters()]).item()))
 

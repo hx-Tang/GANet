@@ -1,3 +1,35 @@
+# CasGANet10 2015
+CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --batchSize=8 \
+                --crop_height=256 \
+                --crop_width=512 \
+                --max_disp=192 \
+                --thread=8 \
+                --data_path='/homes/ht314/dataset/training/' \
+                --training_list='lists/kitti2015_train.list' \
+                --val_list='lists/kitti2012_val24.list'\
+                --save_path='./checkpoint/CasGANet10/2015_t2' \
+                --kitti2015=1 \
+                --shift=3 \
+                --resume='./checkpoint/CasGANet10/2015_best.pth' \
+                --model='CasGANet10'\
+                --nEpochs=50 2>&1 |tee logs/CasGANet10_2015_t2_e50.txt
+exit
+# CasGANet10 sceneflow
+CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --batchSize=8 \
+                --crop_height=256 \
+                --crop_width=512 \
+                --max_disp=192 \
+                --thread=8 \
+                --data_path='/homes/ht314/dataset2/' \
+                --training_list='lists/sceneflow_train.list' \
+                --val_list='lists/sceneflow_val24.list'\
+                --save_path='./checkpoint/CasGANet10/sceneflow' \
+                --shift=3 \
+                --lr=0.001 \
+                --resume='' \
+                --model='CasGANet10'\
+                --nEpochs=50 2>&1 |tee logs/CasGANet10_sceneflow_s_e50.txt
+exit
 # MyGANet9 2015
 CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --batchSize=16 \
                 --crop_height=256 \
@@ -78,7 +110,6 @@ CUDA_VISIBLE_DEVICES=1,2,3 python train.py --batchSize=6 \
                 --resume='./checkpoint/GANet11/2015_epoch_150.pth' \
                 --model='GANet11'\
                 --nEpochs=150 2>&1 |tee logs/GANet11_2015_e300.txt
-
 exit
 # MyGANet5 2015
 CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --batchSize=16 \

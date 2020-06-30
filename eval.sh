@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=1,2,3 python eval.py --max_disp=192 --val_list='lists/sceneflow_test.list' --kitti2015=0 --data_path='/homes/ht314/dataset2/' --resume='./checkpoint/GANet11/sceneflow_epoch_300.pth' --model='GANet11'
+CUDA_VISIBLE_DEVICES=1,2,3 python eval.py --max_disp=192 --val_list='lists/kitti_test.list' --kitti2015=1 --data_path='/homes/ht314/dataset/training/' --resume='./checkpoint/CasGANet10/2015_best.pth' --model='CasGANet10' ##--resume='./checkpoint/MyGANet9/kitti2015_final_best.pth' --model='MyGANet9'
